@@ -843,6 +843,8 @@ struct VLCVodPlayerView: View {
     var onProgressChanged: ((Double, Double?) -> Void)? = nil
     var onPlaybackEnded: (() -> Void)? = nil
     var onToggleFullScreen: (() -> Void)? = nil
+    /// 竖屏全屏入口（nil 时不显示竖屏按钮）。
+    var onPortraitFullScreen: (() -> Void)? = nil
     var canPlayNext: Bool = false
     var onPlayNext: (() -> Void)? = nil
     var sharedController: VLCPlayerController? = nil
@@ -1202,17 +1204,31 @@ struct VLCVodPlayerView: View {
                 
                 Spacer()
                 
-                // 右：全屏
-                if let onToggleFullScreen {
-                    Button {
-                        wakeUpControls()
-                        onToggleFullScreen()
-                    } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 14, weight: .bold))
-                            .frame(minWidth: 36, minHeight: 36)
+                // 右：竖屏全屏 + 横屏全屏
+                HStack(spacing: 4) {
+                    if let onPortraitFullScreen {
+                        Button {
+                            wakeUpControls()
+                            onPortraitFullScreen()
+                        } label: {
+                            Image(systemName: "rectangle.portrait")
+                                .font(.system(size: 13, weight: .bold))
+                                .frame(minWidth: 36, minHeight: 36)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+
+                    if let onToggleFullScreen {
+                        Button {
+                            wakeUpControls()
+                            onToggleFullScreen()
+                        } label: {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 14, weight: .bold))
+                                .frame(minWidth: 36, minHeight: 36)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
             .padding(.horizontal, 12)
@@ -2003,11 +2019,12 @@ struct VLCVodPlayerView: View {
     var onProgressChanged: ((Double, Double?) -> Void)? = nil
     var onPlaybackEnded: (() -> Void)? = nil
     var onToggleFullScreen: (() -> Void)? = nil
+    var onPortraitFullScreen: (() -> Void)? = nil
     var canPlayNext: Bool = false
     var onPlayNext: (() -> Void)? = nil
     var isFullScreenPresentation: Bool = false
     var fullScreenTitle: String = ""
-    
+
     var body: some View {
         AVPlayerContentView(
             urlString: urlString,
@@ -2015,6 +2032,7 @@ struct VLCVodPlayerView: View {
             onProgressChanged: onProgressChanged,
             onPlaybackEnded: onPlaybackEnded,
             onToggleFullScreen: onToggleFullScreen,
+            onPortraitFullScreen: onPortraitFullScreen,
             canPlayNext: canPlayNext,
             onPlayNext: onPlayNext,
             isFullScreenPresentation: isFullScreenPresentation,

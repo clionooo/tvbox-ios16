@@ -112,6 +112,8 @@ struct PlayerView: View {
     var onProgressChanged: ((Double, Double?) -> Void)? = nil
     var onPlaybackEnded: (() -> Void)? = nil
     var onToggleFullScreen: (() -> Void)? = nil
+    /// 竖屏全屏入口：画面保持竖向铺满整屏（适合竖屏视频）。nil 时不显示竖屏按钮。
+    var onPortraitFullScreen: (() -> Void)? = nil
     var canPlayNext: Bool = false
     var onPlayNext: (() -> Void)? = nil
     var systemController: SystemPlayerSessionController? = nil
@@ -146,6 +148,7 @@ struct PlayerView: View {
                     onProgressChanged: onProgressChanged,
                     onPlaybackEnded: onPlaybackEnded,
                     onToggleFullScreen: onToggleFullScreen,
+                    onPortraitFullScreen: onPortraitFullScreen,
                     canPlayNext: canPlayNext,
                     onPlayNext: onPlayNext,
                     sharedController: systemController,
@@ -159,6 +162,7 @@ struct PlayerView: View {
                     onProgressChanged: onProgressChanged,
                     onPlaybackEnded: onPlaybackEnded,
                     onToggleFullScreen: onToggleFullScreen,
+                    onPortraitFullScreen: onPortraitFullScreen,
                     canPlayNext: canPlayNext,
                     onPlayNext: onPlayNext,
                     sharedController: vlcController,
@@ -195,6 +199,8 @@ struct AVPlayerContentView: View {
     var onProgressChanged: ((Double, Double?) -> Void)? = nil
     var onPlaybackEnded: (() -> Void)? = nil
     var onToggleFullScreen: (() -> Void)? = nil
+    /// 竖屏全屏入口（nil 时不显示竖屏按钮）。
+    var onPortraitFullScreen: (() -> Void)? = nil
     var canPlayNext: Bool = false
     var onPlayNext: (() -> Void)? = nil
     var sharedController: SystemPlayerSessionController? = nil
@@ -348,20 +354,38 @@ struct AVPlayerContentView: View {
         #endif
         #if os(iOS)
         .overlay(alignment: .topTrailing) {
-            // 非全屏时右上角常驻全屏按钮：不随控制条隐藏，随时可一键进入全屏。
-            if !isFullScreenPresentation, let onToggleFullScreen {
-                Button {
-                    onToggleFullScreen()
-                } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 26, height: 26)
-                        .background(Color.black.opacity(0.4))
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+            // 非全屏时右上角常驻按钮组：竖屏全屏 + 横屏全屏，不随控制条隐藏。
+            if !isFullScreenPresentation {
+                HStack(spacing: 6) {
+                    if let onPortraitFullScreen {
+                        Button {
+                            onPortraitFullScreen()
+                        } label: {
+                            Image(systemName: "rectangle.portrait")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 26, height: 26)
+                                .background(Color.black.opacity(0.4))
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if let onToggleFullScreen {
+                        Button {
+                            onToggleFullScreen()
+                        } label: {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 26, height: 26)
+                                .background(Color.black.opacity(0.4))
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
                 .padding(.trailing, 10)
                 .padding(.top, 10)
             }
@@ -772,21 +796,39 @@ struct AVPlayerContentView: View {
                 
                 Spacer()
                 
-                // 右：全屏（醒目圆形按钮）
-                if let onToggleFullScreen {
-                    Button {
-                        wakeUpControls()
-                        onToggleFullScreen()
-                    } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 30, height: 30)
-                            .background(Color.white.opacity(0.18))
-                            .clipShape(Circle())
-                            .frame(minWidth: 36, minHeight: 36)
+                // 右：竖屏全屏 + 横屏全屏（醒目圆形按钮）
+                HStack(spacing: 4) {
+                    if let onPortraitFullScreen {
+                        Button {
+                            wakeUpControls()
+                            onPortraitFullScreen()
+                        } label: {
+                            Image(systemName: "rectangle.portrait")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 30, height: 30)
+                                .background(Color.white.opacity(0.18))
+                                .clipShape(Circle())
+                                .frame(minWidth: 36, minHeight: 36)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+
+                    if let onToggleFullScreen {
+                        Button {
+                            wakeUpControls()
+                            onToggleFullScreen()
+                        } label: {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 30, height: 30)
+                                .background(Color.white.opacity(0.18))
+                                .clipShape(Circle())
+                                .frame(minWidth: 36, minHeight: 36)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
             .padding(.horizontal, 12)
