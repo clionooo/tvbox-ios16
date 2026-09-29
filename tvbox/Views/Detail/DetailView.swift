@@ -11,6 +11,8 @@ struct DetailView: View {
     @StateObject private var sharedVLCController = VLCPlayerController()
     @EnvironmentObject var appState: AppState
     @State private var showFullScreen = false
+    /// 全屏方向：true=横屏全屏（旋转铺满），false=竖屏全屏（竖向铺满）。
+    @State private var fullScreenLandscape = true
     /// VLC 全屏退出动画期间为 true，防止内联播放器与全屏播放器同时争抢 drawable
     @State private var isFullScreenDismissing = false
     #if os(macOS)
@@ -52,7 +54,10 @@ struct DetailView: View {
                         onProgressChanged: handlePlaybackProgress,
                         onPlaybackEnded: playNextEpisodeIfNeeded,
                         onToggleFullScreen: {
-                            openFullScreenPlayer()
+                            openFullScreenPlayer(landscape: true)
+                        },
+                        onPortraitFullScreen: {
+                            openFullScreenPlayer(landscape: false)
                         },
                         canPlayNext: canPlayNextEpisode,
                         onPlayNext: playNextEpisodeIfNeeded,
@@ -63,7 +68,7 @@ struct DetailView: View {
                         .aspectRatio(16/9, contentMode: .fit)
                         .background(Color.black)
                         .onTapGesture(count: 2) {
-                            openFullScreenPlayer()
+                            openFullScreenPlayer(landscape: true)
                         }
                 }
                 
@@ -201,7 +206,8 @@ struct DetailView: View {
                         isFullScreenDismissing = true
                         showFullScreen = false
                     },
-                    title: fullscreenTitle
+                    title: fullscreenTitle,
+                    landscape: fullScreenLandscape
                 )
             }
         }
@@ -715,10 +721,14 @@ struct DetailView: View {
         return displayVideo.name
     }
 
-    private func openFullScreenPlayer() {
+    /// 打开全屏播放器。
+    /// - Parameter landscape: true=横屏全屏（请求系统旋转，被拒绝时内容旋转 90° 兜底）；
+    ///   false=竖屏全屏（保持竖屏，画面竖向铺满，适合竖屏视频）。
+    private func openFullScreenPlayer(landscape: Bool = true) {
         #if os(iOS)
+        fullScreenLandscape = landscape
         // 全屏呈现后由 FullScreenPlayerView 内部处理旋转：
-        // 先请求系统转横屏，被拒绝时自动启用"内容旋转 90°"的兜底布局。
+        // 横屏先请求系统转横屏，被拒绝时自动启用"内容旋转 90°"的兜底布局。
         showFullScreen = true
         #else
         guard viewModel.playUrl != nil else { return }
@@ -762,10 +772,11 @@ struct DetailView: View {
 
 /// 全屏播放器
 ///
-/// 横屏策略（双保险）：
-/// 1. 呈现后用 requestGeometryUpdate 请求系统转到横屏（未开竖排锁时自动横屏）；
-/// 2. 若系统拒绝旋转（如控制中心竖排方向锁定开启），则把播放器内容旋转 90°
-///    铺满竖屏画面——用户横持手机即为标准横屏效果，保证任何情况下都能"全屏"。
+/// 方向策略（由 `landscape` 参数决定，对应控制条上的两个全屏按钮）：
+/// - 横屏全屏（双保险）：呈现后 requestGeometryUpdate 请求系统转横屏（未开竖排锁时自动横屏）；
+///   若系统拒绝旋转（如控制中心竖排方向锁定开启），则把播放器内容旋转 90°
+///   铺满竖屏画面——用户横持手机即为标准横屏效果，保证任何情况下都能"全屏"。
+/// - 竖屏全屏：请求系统转回竖屏，画面竖向铺满整屏，适合竖屏视频。
 struct FullScreenPlayerView: View {
     let urlString: String
     var startPosition: Double = 0
@@ -778,6 +789,8 @@ struct FullScreenPlayerView: View {
     var onCloseRequested: (() -> Void)? = nil
     /// 顶部标题（如「第3集」）。
     var title: String = ""
+    /// 是否横屏全屏（false = 竖屏全屏）。
+    var landscape: Bool = true
     @Environment(\.dismiss) private var dismiss
     /// 当前界面方向是否已是横屏（决定是否使用旋转兜底布局）。
     @State private var isLandscapeInterface = false
@@ -787,11 +800,15 @@ struct FullScreenPlayerView: View {
         fullScreenBody
             .onAppear {
                 refreshInterfaceOrientation()
-                Self.requestOrientation(.landscapeRight)
-                // 稍后复查一次：若系统已转横屏，切换到原生横屏布局。
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 400_000_000)
-                    refreshInterfaceOrientation()
+                if landscape {
+                    Self.requestOrientation(.landscapeRight)
+                    // 稍后复查一次：若系统已转横屏，切换到原生横屏布局。
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 400_000_000)
+                        refreshInterfaceOrientation()
+                    }
+                } else {
+                    Self.requestOrientation(.portrait)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
@@ -838,16 +855,20 @@ struct FullScreenPlayerView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                if isLandscapeInterface {
-                    // 系统已转横屏：原生铺满。
+                if landscape && isLandscapeInterface {
+                    // 横屏全屏 + 系统已转横屏：原生铺满。
                     playerContent
                         .frame(width: geo.size.width, height: geo.size.height)
-                } else {
-                    // 竖屏兜底：内容旋转 90°，宽高互换铺满整屏。
+                } else if landscape {
+                    // 横屏全屏 + 竖屏兜底：内容旋转 90°，宽高互换铺满整屏。
                     playerContent
                         .frame(width: geo.size.height, height: geo.size.width)
                         .rotationEffect(.degrees(90))
                         .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                } else {
+                    // 竖屏全屏：保持竖屏，画面竖向铺满整屏（竖屏视频即全屏效果）。
+                    playerContent
+                        .frame(width: geo.size.width, height: geo.size.height)
                 }
             }
             .ignoresSafeArea()
